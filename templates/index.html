@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Circle Quest</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0a0a0f;
+      --panel: #13131d;
+      --orange: #ff8000;
+      --yellow: #ffd447;
+      --red: #ff3b30;
+      --text: #f5f7ff;
+      --muted: #9ca3af;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at 20% 20%, rgba(255, 128, 0, 0.08), transparent 25%),
+        radial-gradient(circle at 80% 30%, rgba(255, 255, 0, 0.08), transparent 25%),
+        var(--bg);
+      color: var(--text);
+      font-family: 'Press Start 2P', 'Segoe UI', system-ui, -apple-system, sans-serif;
+      padding: 24px;
+    }
+
+    .frame {
+      width: 100%;
+      max-width: 1080px;
+      background: linear-gradient(145deg, rgba(255, 128, 0, 0.08), rgba(255, 255, 0, 0.06)), var(--panel);
+      border: 2px solid rgba(255, 128, 0, 0.2);
+      border-radius: 20px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45), inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+      overflow: hidden;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 20px 24px 12px;
+      gap: 12px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 20px;
+      letter-spacing: 1px;
+      color: var(--yellow);
+      text-shadow: 0 0 12px rgba(255, 212, 71, 0.35);
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .score {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: rgba(255, 128, 0, 0.14);
+      border: 1px solid rgba(255, 128, 0, 0.32);
+      color: var(--text);
+      min-width: 140px;
+      justify-content: center;
+      box-shadow: 0 8px 24px rgba(255, 128, 0, 0.18);
+    }
+
+    .score-value {
+      color: var(--yellow);
+      font-size: 18px;
+    }
+
+    .canvas-wrap {
+      position: relative;
+      padding: 0 24px 24px;
+    }
+
+    canvas {
+      width: 100%;
+      height: auto;
+      display: block;
+      border-radius: 16px;
+      background: radial-gradient(circle at 50% 50%, rgba(255, 128, 0, 0.08), transparent 50%), #050509;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+    }
+
+    footer {
+      padding: 12px 24px 20px;
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: 0.5px;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    footer strong {
+      color: var(--yellow);
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <header>
+      <h1>Circle Quest</h1>
+      <div class="controls">
+        <span class="pill">Use arrow keys to move the main circle</span>
+        <span class="pill">Collect yellow orbs to score</span>
+      </div>
+      <div class="score" aria-live="polite">
+        Score
+        <span id="score" class="score-value">0</span>
+      </div>
+    </header>
+
+    <div class="canvas-wrap">
+      <canvas id="gameCanvas" width="800" height="600" aria-label="Circle Quest game area"></canvas>
+    </div>
+
+    <footer>
+      <div><strong>Tip:</strong> Small circles spawn every 1-5 seconds. Stay ready!</div>
+      <div><strong>Goal:</strong> Collect as many orbs as you can.</div>
+    </footer>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreEl = document.getElementById('score');
+
+    const WIDTH = canvas.width;
+    const HEIGHT = canvas.height;
+
+    const COLORS = {
+      black: '#000000',
+      orange: '#ff8000',
+      yellow: '#ffd447',
+      red: '#ff3b30',
+      border: '#ffba63',
+    };
+
+    const mainCircle = {
+      x: WIDTH / 2,
+      y: HEIGHT / 2,
+      radius: 50,
+      speed: 6,
+    };
+
+    const state = {
+      smallCircles: [],
+      score: 0,
+      spawnDelay: randomSpawnDelay(),
+      lastSpawnTime: performance.now(),
+      keys: new Set(),
+    };
+
+    function randomSpawnDelay() {
+      return 1000 + Math.random() * 4000; // 1-5 seconds
+    }
+
+    function spawnSmallCircle() {
+      const radius = 5 + Math.random() * 15;
+      const x = radius + Math.random() * (WIDTH - radius * 2);
+      const y = radius + Math.random() * (HEIGHT - radius * 2);
+      state.smallCircles.push({ x, y, radius });
+    }
+
+    function handleInput() {
+      if (state.keys.has('ArrowLeft')) {
+        mainCircle.x = Math.max(mainCircle.radius, mainCircle.x - mainCircle.speed);
+      }
+      if (state.keys.has('ArrowRight')) {
+        mainCircle.x = Math.min(WIDTH - mainCircle.radius, mainCircle.x + mainCircle.speed);
+      }
+      if (state.keys.has('ArrowUp')) {
+        mainCircle.y = Math.max(mainCircle.radius, mainCircle.y - mainCircle.speed);
+      }
+      if (state.keys.has('ArrowDown')) {
+        mainCircle.y = Math.min(HEIGHT - mainCircle.radius, mainCircle.y + mainCircle.speed);
+      }
+    }
+
+    function distance(a, b) {
+      const dx = a.x - b.x;
+      const dy = a.y - b.y;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    function checkCollisions() {
+      state.smallCircles = state.smallCircles.filter(circle => {
+        const d = distance(mainCircle, circle);
+        const collided = d <= mainCircle.radius + circle.radius;
+        if (collided) {
+          state.score += 1;
+          scoreEl.textContent = state.score;
+        }
+        return !collided;
+      });
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, WIDTH, HEIGHT);
+
+      // Background glow
+      const gradient = ctx.createRadialGradient(
+        mainCircle.x,
+        mainCircle.y,
+        10,
+        mainCircle.x,
+        mainCircle.y,
+        Math.max(WIDTH, HEIGHT)
+      );
+      gradient.addColorStop(0, 'rgba(255, 128, 0, 0.08)');
+      gradient.addColorStop(1, 'rgba(0, 0, 0, 0.75)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+      // Small circles
+      ctx.fillStyle = COLORS.yellow;
+      state.smallCircles.forEach(({ x, y, radius }) => {
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // Main circle
+      ctx.beginPath();
+      ctx.arc(mainCircle.x, mainCircle.y, mainCircle.radius, 0, Math.PI * 2);
+      ctx.fillStyle = COLORS.red;
+      ctx.fill();
+      ctx.lineWidth = 6;
+      ctx.strokeStyle = COLORS.orange;
+      ctx.stroke();
+    }
+
+    function loop(timestamp) {
+      handleInput();
+      checkCollisions();
+
+      const timeSinceSpawn = timestamp - state.lastSpawnTime;
+      if (timeSinceSpawn >= state.spawnDelay) {
+        spawnSmallCircle();
+        state.spawnDelay = randomSpawnDelay();
+        state.lastSpawnTime = timestamp;
+      }
+
+      draw();
+      requestAnimationFrame(loop);
+    }
+
+    document.addEventListener('keydown', (event) => {
+      state.keys.add(event.key);
+    });
+
+    document.addEventListener('keyup', (event) => {
+      state.keys.delete(event.key);
+    });
+
+    // Start the game loop
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>
